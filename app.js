@@ -4,15 +4,21 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const app = express();
+const md5 = require('md5');
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 const mongoose = require('mongoose');
+const encrypt = require('mongoose-encryption');
 mongoose.set('strictQuery', true);
 mongoose.connect(`mongodb+srv://${process.env.DB_LOGIN}:${process.env.DB_PASSWORD}@cluster76232.ammm8wy.mongodb.net/userDB`);
 
-// Create schema and model
-const userSchema = { email: String, password: String };
+const userSchema = new mongoose.Schema({ email: String, password: String });
+
+// Encryption
+const secret = process.env.ENCRYPTION_STRING;
+userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
+
 const User = mongoose.model('User', userSchema);
 
 
@@ -28,7 +34,7 @@ app.get('/register', function(req,res) {
 
 app.post('/register', function(req,res) {
     let newUserLogin = req.body.username;
-    let newUserPassword = req.body.password;
+    let newUserPassword = md5(req.body.password);
     const newUser = new User({ email: newUserLogin, password: newUserPassword });
     newUser.save();
     res.render('secrets');
@@ -36,7 +42,7 @@ app.post('/register', function(req,res) {
 
 app.post('/login', function(req,res) {
     let existingUserLogin = req.body.username;
-    let existingUserPassword = req.body.password;
+    let existingUserPassword = md5(req.body.password);
     User.findOne({email: existingUserLogin}, function (err, foundUser) {
         if (existingUserPassword === foundUser.password) {
             res.render('secrets');
