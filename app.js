@@ -27,19 +27,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// passport.use(new GoogleStrategy({
-//     clientID:     process.env.GOOGLE_CLIENT_ID,
-//     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-//     callbackURL: "http://localhost:3000/auth/google/secrets",
-//     passReqToCallback   : true
-//   },
-//   function(request, accessToken, refreshToken, profile, done) {
-//     User.findOrCreate({ googleId: profile.id }, function (err, user) {
-//       return done(err, user);
-//     });
-//   }
-// ));
-
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -58,20 +45,14 @@ const encrypt = require('mongoose-encryption');
 mongoose.set('strictQuery', true);
 mongoose.connect(`mongodb+srv://${process.env.DB_LOGIN}:${process.env.DB_PASSWORD}@cluster76232.ammm8wy.mongodb.net/userDB`);
 
-const userSchema = new mongoose.Schema({ email: String, password: String, googleId: String });
+const userSchema = new mongoose.Schema({ email: String, password: String, googleId: String, secret: String });
 
 userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
 
-// Encryption
-// const secret = process.env.ENCRYPTION_STRING;
-// userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
-
 const User = mongoose.model('User', userSchema);
 
 passport.use(User.createStrategy());
-// passport.serializeUser(User.serializeUser());
-// passport.deserializeUser(User.deserializeUser());
 
 passport.serializeUser(function(user, cb) {
     process.nextTick(function() {
@@ -106,11 +87,25 @@ app.get('/logout', function(req, res, next){
   });
 app.get('/secrets', function(req,res){
     if (req.isAuthenticated()) {
-        res.render('secrets');
+        User.find({secret: {$exists: true}}, function (err, foundUsers) {
+          let submittedSecrets = [];
+          for (let i=0; i<foundUsers.length; i++) {
+            submittedSecrets[i] = foundUsers[i].secret;
+          }
+          res.render('secrets', {randomSecret: submittedSecrets[Math.floor(Math.random()*submittedSecrets.length)]});
+        })
     } else {
         res.redirect('/login');
     }
 });
+app.get('/submit', function(req,res){
+  if (req.isAuthenticated()) {
+      res.render('submit');
+  } else {
+      res.redirect('/login');
+  }
+});
+
 app.get('/auth/google',
   passport.authenticate('google', { scope: ['profile'] }));
 
@@ -153,6 +148,18 @@ app.post('/login', function(req,res) {
     })
 })
 
+app.post('/submit', function(req,res) {
+  const newSecret = req.body.secret;
+  const userId = req.user.id;
+  User.findByIdAndUpdate(userId, { secret: newSecret },
+  function (err, docs) {
+    if (err){
+    console.log(err)
+    } else{
+    res.redirect('/secrets')
+  }
+  })
+})
 
 
 
